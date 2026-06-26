@@ -21,29 +21,21 @@ const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) ||
 
 const saveAsTxt = (text, name='output.txt') => {
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return URL.createObjectURL(blob);
 };
-const openInNewTab = (text) => {
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  window.open(url, '_blank', 'noopener,noreferrer');
-  setTimeout(() => URL.revokeObjectURL(url), 30_000);
-};
+const blobUrlForText = (text) => URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
 const shareText = async (text, title='Toolverse result') => {
   try {
-    if (navigator.share) {
-      const file = new File([text], 'output.txt', { type: 'text/plain' });
-      if (navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title });
-      } else {
-        await navigator.share({ text, title });
-      }
-    } else {
-      toast({ title: 'Sharing not supported on this device' });
+    const file = new File([text], 'output.txt', { type: 'text/plain' });
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title }); return; }
+      catch (e) { if (e?.name === 'AbortError') return; }
     }
+    if (navigator.share) {
+      try { await navigator.share({ text, title }); return; }
+      catch (e) { if (e?.name === 'AbortError') return; }
+    }
+    toast({ title: 'Sharing not supported on this device' });
   } catch (e) { /* user cancelled */ }
 };
 
@@ -195,20 +187,30 @@ export default function ClientToolRunner({ tool }) {
           <Textarea value={output} readOnly className="min-h-[180px] bg-zinc-950 border-white/10 text-white font-mono text-sm"/>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
-            <Button onClick={()=>saveAsTxt(output, `${tool.id}.txt`)} className="bg-white text-zinc-900 hover:bg-zinc-100 h-10">
-              <Download className="w-4 h-4 mr-2"/> Download .txt
-            </Button>
-            <Button onClick={()=>openInNewTab(output)} variant="outline" className="bg-zinc-900 text-white border-white/10 hover:bg-zinc-800 hover:text-white h-10">
-              <ExternalLink className="w-4 h-4 mr-2"/> Open in tab
-            </Button>
-            {(isMobile() || (typeof navigator !== 'undefined' && navigator.share)) && (
-              <Button onClick={()=>shareText(output)} variant="outline" className="bg-zinc-900 text-white border-white/10 hover:bg-zinc-800 hover:text-white h-10">
-                <Share2 className="w-4 h-4 mr-2"/> Share / Save
-              </Button>
+            <a
+              href={blobUrlForText(output)}
+              download={`${tool.id}.txt`}
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-white text-zinc-900 hover:bg-zinc-100 h-10 px-4 text-sm font-medium transition-colors"
+              onClick={()=>toast({ title: 'Saving…' })}
+            >
+              <Download className="w-4 h-4"/> Download .txt
+            </a>
+            <a
+              href={blobUrlForText(output)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-zinc-900 text-white border border-white/10 hover:bg-zinc-800 h-10 px-4 text-sm font-medium transition-colors"
+            >
+              <ExternalLink className="w-4 h-4"/> {isIOS() ? 'Open in Safari' : 'Open in tab'}
+            </a>
+            {(typeof navigator !== 'undefined' && typeof navigator.share === 'function') && (
+              <button onClick={()=>shareText(output)} className="inline-flex items-center justify-center gap-2 rounded-md bg-zinc-900 text-white border border-white/10 hover:bg-zinc-800 h-10 px-4 text-sm font-medium transition-colors">
+                <Share2 className="w-4 h-4"/> Share / Save
+              </button>
             )}
-            <Button onClick={()=>COPY(output)} variant="outline" className="bg-zinc-900 text-white border-white/10 hover:bg-zinc-800 hover:text-white h-10">
-              <Copy className="w-4 h-4 mr-2"/> Copy
-            </Button>
+            <button onClick={()=>COPY(output)} className="inline-flex items-center justify-center gap-2 rounded-md bg-zinc-900 text-white border border-white/10 hover:bg-zinc-800 h-10 px-4 text-sm font-medium transition-colors">
+              <Copy className="w-4 h-4"/> Copy
+            </button>
           </div>
 
           {isIOS() && (
