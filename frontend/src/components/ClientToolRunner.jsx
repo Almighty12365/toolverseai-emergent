@@ -6,13 +6,45 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Switch } from './ui/switch';
 import { Slider } from './ui/slider';
-import { Copy, Loader2, Wand2 } from 'lucide-react';
+import { Copy, Loader2, Wand2, Download, ExternalLink, Share2 } from 'lucide-react';
 import * as Tools from '../lib/clientTools';
 import { toast } from '../hooks/use-toast';
 
 const COPY = (text) => {
   navigator.clipboard.writeText(text);
   toast({ title: 'Copied to clipboard' });
+};
+
+const isMobile = () => /Mobi|Android|iPhone|iPad|iPod/.test(navigator.userAgent);
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+const saveAsTxt = (text, name='output.txt') => {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+const openInNewTab = (text) => {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank', 'noopener,noreferrer');
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+};
+const shareText = async (text, title='Toolverse result') => {
+  try {
+    if (navigator.share) {
+      const file = new File([text], 'output.txt', { type: 'text/plain' });
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title });
+      } else {
+        await navigator.share({ text, title });
+      }
+    } else {
+      toast({ title: 'Sharing not supported on this device' });
+    }
+  } catch (e) { /* user cancelled */ }
 };
 
 export default function ClientToolRunner({ tool }) {
@@ -161,6 +193,29 @@ export default function ClientToolRunner({ tool }) {
             <button onClick={()=>COPY(output)} className="text-zinc-400 hover:text-white text-xs inline-flex items-center gap-1"><Copy className="w-3.5 h-3.5"/> Copy</button>
           </div>
           <Textarea value={output} readOnly className="min-h-[180px] bg-zinc-950 border-white/10 text-white font-mono text-sm"/>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+            <Button onClick={()=>saveAsTxt(output, `${tool.id}.txt`)} className="bg-white text-zinc-900 hover:bg-zinc-100 h-10">
+              <Download className="w-4 h-4 mr-2"/> Download .txt
+            </Button>
+            <Button onClick={()=>openInNewTab(output)} variant="outline" className="bg-zinc-900 text-white border-white/10 hover:bg-zinc-800 hover:text-white h-10">
+              <ExternalLink className="w-4 h-4 mr-2"/> Open in tab
+            </Button>
+            {(isMobile() || (typeof navigator !== 'undefined' && navigator.share)) && (
+              <Button onClick={()=>shareText(output)} variant="outline" className="bg-zinc-900 text-white border-white/10 hover:bg-zinc-800 hover:text-white h-10">
+                <Share2 className="w-4 h-4 mr-2"/> Share / Save
+              </Button>
+            )}
+            <Button onClick={()=>COPY(output)} variant="outline" className="bg-zinc-900 text-white border-white/10 hover:bg-zinc-800 hover:text-white h-10">
+              <Copy className="w-4 h-4 mr-2"/> Copy
+            </Button>
+          </div>
+
+          {isIOS() && (
+            <p className="text-xs text-blue-200/80 mt-3 leading-relaxed">
+              📱 <span className="font-medium text-blue-100">On iPhone/iPad</span>: tap <span className="text-white font-medium">Share / Save</span> → <span className="text-white font-medium">Save to Files</span>, or use <span className="text-white font-medium">Open in tab</span> then Safari's Share menu.
+            </p>
+          )}
         </div>
       )}
     </div>

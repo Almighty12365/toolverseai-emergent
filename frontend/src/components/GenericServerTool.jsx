@@ -6,10 +6,11 @@ import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Slider } from './ui/slider';
 import { Textarea } from './ui/textarea';
-import { Loader2, Download, CheckCircle2, Send } from 'lucide-react';
-import { apiPost, downloadBlob, API } from '../lib/api';
+import { Loader2, Send, Wand2 } from 'lucide-react';
+import { API } from '../lib/api';
 import { toast } from '../hooks/use-toast';
 import axios from 'axios';
+import ResultPanel from './ResultPanel';
 
 const acceptMap = {
   'pdf': 'application/pdf',
@@ -44,7 +45,8 @@ const jsonTools = ['extract-fonts', 'search-pdf', 'compare', 'pdf-info', 'img-me
 export default function GenericServerTool({ tool }) {
   const [files, setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
+  const [resultBlob, setResultBlob] = useState(null);
+  const [resultName, setResultName] = useState('');
   const [result, setResult] = useState(null);
   const [summary, setSummary] = useState('');
   const [opts, setOpts] = useState({
@@ -118,7 +120,7 @@ export default function GenericServerTool({ tool }) {
       toast({ title: 'Please add a file first' });
       return;
     }
-    setBusy(true); setDone(false); setResult(null); setSummary('');
+    setBusy(true); setResultBlob(null); setResult(null); setSummary('');
     try {
       let endpoint = tool.endpoint;
       let fd;
@@ -138,16 +140,18 @@ export default function GenericServerTool({ tool }) {
       // JSON-returning tools
       if (jsonTools.includes(tool.id)) {
         const res = await axios.post(`${API}${endpoint}`, fd);
-        setResult(res.data); setDone(true); setBusy(false); return;
+        setResult(res.data); setBusy(false); return;
       }
       if (tool.id === 'summarize') {
         const res = await axios.post(`${API}${endpoint}`, fd);
-        setSummary(res.data.summary || ''); setDone(true); setBusy(false); return;
+        setSummary(res.data.summary || ''); setBusy(false); return;
       }
 
-      const res = await apiPost(endpoint, fd);
-      downloadBlob(res.data, downloadName(tool.id));
-      setDone(true); toast({ title: 'Done! File downloaded.' });
+      // Blob-returning tools — preview, don't auto-download
+      const res = await axios.post(`${API}${endpoint}`, fd, { responseType: 'blob' });
+      setResultBlob(res.data);
+      setResultName(downloadName(tool.id));
+      toast({ title: 'Ready!', description: 'Preview & save below.' });
     } catch (e) {
       const msg = e?.response?.data?.detail || e.message || 'Something went wrong';
       toast({ title: 'Failed', description: typeof msg === 'string' ? msg : 'Try again' });
@@ -310,9 +314,8 @@ export default function GenericServerTool({ tool }) {
       {renderOptions()}
       <div className="flex flex-wrap items-center gap-3">
         <Button onClick={handleRun} disabled={busy} className="bg-gradient-to-r from-fuchsia-500 to-violet-500 hover:from-fuchsia-600 hover:to-violet-600 text-white h-11 px-6 border-0">
-          {busy ? <><Loader2 className="w-4 h-4 mr-2 animate-spin"/> Processing…</> : <>{tool.noFile ? 'Generate' : 'Process & Download'} <Download className="ml-2 w-4 h-4"/></>}
+          {busy ? <><Loader2 className="w-4 h-4 mr-2 animate-spin"/> Processing…</> : <><Wand2 className="w-4 h-4 mr-2"/> {tool.noFile ? 'Generate' : 'Process'}</>}
         </Button>
-        {done && <span className="text-emerald-400 text-sm inline-flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4"/> Done</span>}
       </div>
 
       {summary && (
@@ -330,6 +333,10 @@ export default function GenericServerTool({ tool }) {
             <pre className="whitespace-pre-wrap">{JSON.stringify(result, null, 2)}</pre>
           )}
         </div>
+      )}
+
+      {resultBlob && (
+        <ResultPanel blob={resultBlob} filename={resultName} onClose={()=>setResultBlob(null)} />
       )}
     </Section>
   );
